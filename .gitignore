@@ -1,3 +1,6 @@
 /.vscode
 *.json
 .env
+/.serverless
+serverless.yml
+/python

@@ -1,0 +1,19 @@
+service: CLOUDFORMATIONNAME
+
+provider:
+  name: aws
+  runtime: python3.7
+  region: REGION
+package:
+  include:
+    - FILENAME.py
+functions:
+  user_role:
+    handler: FILENAME.FUNCTIONNAME
+    role: arn:aws:iam::ID:role/ROLE
+    layers:
+      - arn:aws:lambda:REGION:ID:layer:LAYERNAME:VERSION
+    events:
+      - http:
+          path: /PATH
+          method: get

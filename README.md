@@ -1,6 +1,10 @@
 # Deploy Lambda Layer To AWS
 
-This script requires Docker to run and will create a folder named python
+## requirements
+
+- Docker to run and will create a folder named python
+- aws-cli to deploy function, or
+- serverless cli + serverless.yml file (recommended)
 
 ```sh
 docker run --rm -v "$PWD":/var/task "lambci/lambda:build-python3.7" /bin/sh -c "pip install -r requirements.txt -t python/lib/python3.7/site-packages/ --upgrade; exit"

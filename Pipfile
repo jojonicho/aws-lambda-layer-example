@@ -12,7 +12,6 @@ oauth2client = "*"
 pyopenssl = "*"
 python-dotenv = "*"
 boto3 = "*"
-pandas = "*"
 
 [requires]
 python_version = "3.7"
