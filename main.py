@@ -5,6 +5,53 @@ import json
 from pprint import pprint
 from oauth2client.service_account import ServiceAccountCredentials
 
+# from dotenv import load_dotenv
+
+# load_dotenv()
+GET_HEADER = {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET",
+}
+POST_HEADER = {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST",
+    "Access-Control-Allow-Credentials": True,
+}
+
+
+def getResponse(e):
+    return {
+        "statusCode": 200,
+        "headers": GET_HEADER,
+        "body": json.dumps({"message": str(e)}),
+    }
+
+
+def getErrorResponse(e):
+    return {
+        "statusCode": 400,
+        "headers": GET_HEADER,
+        "body": json.dumps({"message": str(e)}),
+    }
+
+
+def postResponse(e):
+    return {
+        "statusCode": 200,
+        "headers": POST_HEADER,
+        "body": json.dumps({"message": str(e)}),
+    }
+
+
+def postErrorResponse(e):
+    return {
+        "statusCode": 400,
+        "headers": POST_HEADER,
+        "body": json.dumps({"message": str(e)}),
+    }
+
 
 class Sheet:
     def __init__(self, docname, worksheet):
@@ -23,7 +70,21 @@ class Sheet:
         )
         CREDENTIALS = ServiceAccountCredentials.from_json_keyfile_name(FILENAME, SCOPE)
         self.gc = gspread.authorize(CREDENTIALS)
-        self.worksheet = self.gc.open(docname).worksheet(worksheet)
+        self.document = self.gc.open(docname)
+        try:
+            self.worksheet = self.document.worksheet(worksheet)
+        except Exception as e:
+            role = worksheet.split("_")[0]
+            if role in ["manager", "supervisor"]:
+                self.worksheet = self.document.add_worksheet(
+                    title=worksheet, rows="100", cols="20"
+                )
+                if role == "manager":
+                    self.add(["user", "supervisor", "data", "status", "actionBy"])
+                if role == "supervisor":
+                    self.add(["user", "application", "data", "status", "manager"])
+            else:
+                print("Only managers and supervisors are allowed to make records!")
 
     def find(self, q):
         num_row = self.worksheet.row_count
@@ -41,20 +102,6 @@ class Sheet:
         if not found:
             return None
 
-    # def find_email(self, q):
-    #     df = self.df()
-    #     indexes = df[df["email"] == q].index
-    #     if len(indexes) >= 1:
-    #         return indexes[0]
-    #     return None
-
-    # def find_all_email(self, q):
-    #     df = self.df()
-    #     indexes = df[df["email"] == q].index
-    #     if len(indexes) >= 1:
-    #         return indexes
-    #     return None
-
     def add(self, row):
         self.worksheet.append_row(row)
 
@@ -69,17 +116,6 @@ class Sheet:
         print(f"CUR VALUE - {value}")
         return True
 
-    # def update(self, key, value):
-    #     y = self.find_email(key)
-    #     if y is None:
-    #         return False
-    #     value_cell = self.worksheet.cell(y, 2)
-    #     print(f"PREV VALUE - {value_cell.value}")
-    #     # pandas 0 indexing, +2 -> header + 1 based
-    #     self.sheet.update_cell(y + 2, 2, value)
-    #     print(f"CUR VALUE - {value}")
-    #     return True
-
     def delete(self, key):
         coord = self.find(key)
         if coord is None:
@@ -92,12 +128,6 @@ class Sheet:
         # add condition if rank is owner, cannot delete
         if end == -1:
             self.worksheet.delete_rows(start)
-        # else:
-        #     self.sheet.delete_rows(start, end)
-
-    # def df(self):
-    #     self.dataframe = pd.DataFrame(self.worksheet.get_all_records())
-    #     return self.dataframe
 
     def all(self,):
         return self.worksheet.get_all_records()
@@ -107,52 +137,220 @@ def get_user_role(event, context):
     try:
         user_role_wks = Sheet("joint-tables", "UserRole")
     except Exception as e:
-        return {"statusCode": 200, "body": str(e)}
-    return {"statusCode": 200, "body": json.dumps(user_role_wks.all())}
+        return getErrorResponse(e)
+    return {
+        "statusCode": 200,
+        "headers": GET_HEADER,
+        "body": json.dumps(user_role_wks.all()),
+    }
 
 
 def get_user_supervisor(event, context):
     try:
         user_supervisor_wks = Sheet("joint-tables", "UserSupervisor")
     except Exception as e:
-        return {"statusCode": 200, "body": str(e)}
-    return {"statusCode": 200, "body": json.dumps(user_supervisor_wks.all())}
+        return getErrorResponse(e)
+    return {
+        "statusCode": 200,
+        "headers": GET_HEADER,
+        "body": json.dumps(user_supervisor_wks.all()),
+    }
 
 
-# role_application_wks = Sheet("joint-tables", "RoleApplication")
-# user_role_wks = Sheet("joint-tables", "UserRole")
-# application_manager_wks = Sheet("joint-tables", "ApplicationManager")
-# user_supervisor_wks = Sheet("joint-tables", "UserSupervisor")
+def get_applications(event, context):
+    try:
+        application_wks = Sheet("joint-tables", "Applications")
+    except Exception as e:
+        return getErrorResponse(e)
+    return {
+        "statusCode": 200,
+        "headers": GET_HEADER,
+        "body": json.dumps(application_wks.worksheet.get_all_values()),
+    }
 
-# worksheets = [
-#     role_application_wks,
-#     user_role_wks,
-#     application_manager_wks,
-#     user_supervisor_wks,
-# ]
+
+def get_manager_record(event, context):
+    print(event)
+    try:
+        body = json.loads(event["body"])
+        email = body["email"]
+        user = email.split("@")[0]
+        manager_wks = Sheet("manager_records", f"manager_{user}_records")
+    except Exception as e:
+        return postErrorResponse(e)
+    return {
+        "statusCode": 200,
+        "headers": POST_HEADER,
+        "body": json.dumps(manager_wks.all()),
+    }
 
 
-# sheet.delete_rows(2)
-# sheet.add(["myemaik4", "something"])
-# sheet.delete("myemaik4")
-# sheet.update("jojonicho181@gmail.com", "not owner")
-# df = user_role_wks.df()
-# pprint(df)
+def get_supervisor_record(event, context):
+    print(event)
+    try:
+        body = json.loads(event["body"])
+        email = body["email"]
+        user = email.split("@")[0]
+        supervisor_wks = Sheet("supervisor_records", f"supervisor_{user}_records")
+    except Exception as e:
+        return postErrorResponse(e)
+    return {
+        "statusCode": 200,
+        "headers": POST_HEADER,
+        "body": json.dumps(supervisor_wks.all()),
+    }
 
-# for wks in worksheets:
-#     pprint(wks.all())
-# pprint(user_role_wks.all())
 
-# print(sheet.find_email("jojonicho181@gmail.com"))
+def reject_supervisor_record(event, context):
+    print(event)
+    try:
+        body = json.loads(event["body"])
+        row = body["row"]
+        user = body["user"]
+        status = body["status"]
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+    try:
+        supervisor = user["email"].split("@")[0]
+        print(supervisor)
+        supervisor_wks = Sheet("supervisor_records", f"supervisor_{supervisor}_records")
+        supervisor_wks.worksheet.update_cell(row, 4, status)
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+    return postResponse("Successfully rejected supervisor request")
 
-# pprint(sheet.findall("mario"))
-# data = sheet.get_all_records()
-# while x > 0:
-#     val = sheet.row_values(x)
-#     print(val)
-# if(val == 'mario')
-# row = sheet.row_values()
-# sheet.append_row(["luigi", "peach"])
-# sheet.find("mario")
-# sheet.update_cell(sheet.findall("mario"), "not mario")
 
+def reject_manager_record(event, context):
+    print(event)
+    try:
+        body = json.loads(event["body"])
+        row = body["row"]
+        user = body["user"]
+        status = body["status"]
+        application = body["application"]
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+    # try:
+    #     manager = user["email"].split("@")[0]
+    #     print(manager)
+    #     manager_wks = Sheet("manager_records", f"manager_{manager}_records")
+    #     manager_wks.worksheet.update_cell(row, 4, "rejected")
+    # except Exception as e:
+    #     print(e)
+    #     return postErrorResponse(e)
+    try:
+        manager_wks = Sheet("manager_records", f"manager_{application}_records")
+        print(manager_wks.all())
+        manager_wks.worksheet.update_cell(row, 4, "rejected")
+    except Exception as e:
+        print(e)
+        pass
+    return postResponse("Successfully rejected manager request")
+
+
+# deprecated, using access.approve_supervisor insread
+# def approve_supervisor_record(event, context):
+#     print(event)
+#     try:
+#         body = json.loads(event["body"])
+#         row = body["row"]
+#         user = body["user"]
+#         supervisor = body["supervisor"]
+#         data = body["data"]
+#         applications = body["applications"]
+#         status = body["status"]
+#     except Exception as e:
+#         print(e)
+#         return postErrorResponse(e)
+
+#     print("going to sheets")
+#     success = []
+#     if type(applications) == str:
+#         applications = [applications]
+#     # if want to change to pass to manager instead
+#     for app in applications:
+#         print(f"updating {app}'s manager record'")
+#         try:
+#             manager_wks = Sheet("manager_records", f"manager_{app}_records")
+#             print(manager_wks.all())
+#             manager_wks.add([user, supervisor, str(data), ""])
+#         except Exception as e:
+#             print(e)
+#             pass
+#         else:
+#             success.append(app)
+#     try:
+#         a = success[0]
+#         supervisor = supervisor.split("@")[0]
+#         supervisor_wks = Sheet("supervisor_records", f"supervisor_{supervisor}_records")
+#         supervisor_wks.worksheet.update_cell(row, 4, status)
+#     except Exception as e:
+#         print(e)
+#         return postErrorResponse(e)
+#     return postResponse(f"notified managers {str(success)}")
+
+
+def approve_manager_record(event, context):
+    print(event)
+    print("getting user credentials")
+    try:
+        body = json.loads(event["body"])
+        supervisor = body["supervisor"]
+        user = body["user"]
+        manager = body["manager"]
+        data = body["data"]
+        row = body["row"]
+        application = body["application"]
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+    print("adding request to supervisor")
+    try:
+        supervisor = supervisor.split("@")[0]
+        supervisor_wks = Sheet("supervisor_records", f"supervisor_{supervisor}_records")
+        supervisor_wks.add([user, application, str(data), "", manager])
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+    else:
+        try:
+            manager_wks = Sheet("manager_records", f"manager_{application}_records")
+            print(manager_wks.all())
+            manager_wks.worksheet.update_cell(row, 4, "approved")
+        except Exception as e:
+            print(e)
+            pass
+    return postResponse("Successfully upped to supervisor")
+
+
+def user_request(event, context):
+    print(event)
+    print("getting user credentials")
+    try:
+        body = json.loads(event["body"])
+        applications = body["applications"]
+        user = body["user"]
+        data = body["data"]
+        supervisor = user["supervisor"]
+        if supervisor == "":
+            return postErrorResponse("No supervisor found")
+    except Exception as e:
+        print(e)
+        return postErrorResponse(e)
+
+    print("adding request to manager")
+    success = []
+    for manager in applications:
+        print(f"updating {manager}'s record'")
+        try:
+            manager_wks = Sheet("manager_records", f"manager_{manager}_records")
+            manager_wks.add([user["email"], supervisor, str(data)])
+        except Exception as e:
+            print(e)
+            pass
+        else:
+            success.append(manager)
+    return postResponse(f"Successful request for {str(success)}")

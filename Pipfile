@@ -12,6 +12,7 @@ oauth2client = "*"
 pyopenssl = "*"
 python-dotenv = "*"
 boto3 = "*"
+selenium = "*"
 
 [requires]
 python_version = "3.7"
